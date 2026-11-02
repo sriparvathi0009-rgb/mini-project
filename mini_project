@@ -1,0 +1,7 @@
+import pandas as pd
+
+jobs = pd.read_csv("glassdoor_jobs.csv")
+print(jobs.head())
+
+resumes = pd.read_csv("resume_data.csv")
+print(resumes.head())

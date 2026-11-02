@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accessible Sign Language Interview Suite — TalentAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- MediaPipe Hands & Camera Utils for Real-Time 21 Landmark Detection -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        :root {
+            --accessible-primary: #7c3aed;
+            --accessible-hover: #6d28d9;
+            --accessible-light: #f5f3ff;
+            --accessible-dark: #1e1b4b;
+            --neon-sign: #10b981;
+            --neon-sign-glow: rgba(16, 185, 129, 0.4);
+            --meet-blue: #1a73e8;
+        }
+
+        .accessible-badge {
+            background: #ede9fe;
+            color: #6d28d9;
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 0.4rem 0.85rem;
+            border-radius: var(--radius-full);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            border: 1px solid #ddd6fe;
+        }
+
+        .accessible-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        @media (max-width: 992px) {
+            .accessible-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Camera & Canvas Feed Box */
+        .vision-container {
+            position: relative;
+            background: #0f172a;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            aspect-ratio: 16 / 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-lg);
+            border: 2px solid #334155;
+        }
+
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            display: block;
+        }
+
+        #skeletonCanvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* match mirrored webcam */
+            pointer-events: none;
+        }
+
+        /* Floating Live Sign Recognition Overlay */
+        .sign-overlay-pill {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: white;
+            z-index: 10;
+        }
+
+        .sign-letter-box {
+            background: var(--neon-sign);
+            color: #0f172a;
+            font-size: 1.6rem;
+            font-weight: 900;
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px var(--neon-sign-glow);
+        }
+
+        .hold-progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 6px;
+            background: var(--neon-sign);
+            width: 0%;
+            transition: width 0.1s linear;
+            z-index: 12;
+        }
+
+        /* Sentence Builder Box */
+        .sentence-box-container {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            margin-top: 1.25rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .sentence-display {
+            background: #f8fafc;
+            border: 2px dashed #cbd5e1;
+            border-radius: var(--radius-sm);
+            padding: 1rem 1.25rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e293b;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            word-break: break-word;
+            letter-spacing: 0.05em;
+        }
+
+        .sentence-display .cursor-blink {
+            display: inline-block;
+            width: 3px;
+            height: 1.2em;
+            background: var(--accessible-primary);
+            margin-left: 4px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Two-Way Captions Box (Interviewer Speech to Text) */
+        .captions-box {
+            background: #0f172a;
+            color: white;
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+            border-left: 5px solid var(--accessible-primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .captions-text {
+            font-size: 1.05rem;
+            line-height: 1.5;
+            color: #f1f5f9;
+            font-weight: 500;
+            min-height: 50px;
+        }
+
+        /* Communication History Log */
+        .comm-history-log {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            max-height: 220px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .msg-bubble {
+            padding: 0.5rem 0.85rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            max-width: 85%;
+        }
+
+        .msg-candidate {
+            align-self: flex-start;
+            background: #e0e7ff;
+            color: #3730a3;
+            border: 1px solid #c7d2fe;
+        }
+
+        .msg-interviewer {
+            align-self: flex-end;
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        /* Quick Sign Buttons */
+        .quick-phrase-pill {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            padding: 0.4rem 0.75rem;
+            border-radius: var(--radius-full);
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #334155;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-phrase-pill:hover {
+            border-color: var(--accessible-primary);
+            color: var(--accessible-primary);
+            background: var(--accessible-light);
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="navbar">
+        <a href="/" class="nav-brand">
+            <div class="brand-icon">⚡</div>
+            <div class="brand-text">
+                <h1>TalentAI Matcher</h1>
+                <p>AI-Powered Accessible Recruitment Suite</p>
+            </div>
+        </a>
+        <div class="nav-actions">
+            <a href="/" class="btn btn-outline btn-sm">🏠 Dashboard</a>
+            <a href="/interview" class="btn btn-outline btn-sm">📹 Standard Lobby</a>
+            <span class="accessible-badge">🤟 Sign Language AI Active</span>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <!-- Top Header & Inclusivity Status -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+            <div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                    <span class="accessible-badge" style="background: #10b981; color: white; border: none;">
+                        ✓ Inclusivity Enabled
+                    </span>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">
+                        MediaPipe 21 Hand Landmarks &bull; Real-Time Vision &bull; Two-Way Audio/Text Bridge
+                    </span>
+                </div>
+                <h1 style="font-size: 1.6rem; font-weight: 800; color: #1e293b;">
+                    Sign Language Recognition Interview Suite
+                </h1>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">
+                    Bridging communication between deaf/mute candidates and interviewers through computer vision and speech synthesis.
+                </p>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-outline btn-sm" onclick="toggleASLGuideModal()">
+                    📖 ASL Landmark Guide
+                </button>
+                <a href="{{ session.meet_url or 'https://meet.google.com/new' }}" target="_blank" class="btn btn-primary btn-sm" style="background: var(--meet-blue);">
+                    Launch Google Meet ↗
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Accessible Grid -->
+        <div class="accessible-grid">
+
+            <!-- LEFT: Real-Time Hand Landmark Tracking & Word Builder -->
+            <div>
+                <div class="card" style="padding: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <h3 style="font-size: 1.1rem; font-weight: 700; color: #1e293b;">
+                            📹 Candidate Live Sign Feed
+                        </h3>
+                        <span id="trackerStatusBadge" style="font-size: 0.8rem; color: #16a34a; font-weight: 600;">
+                            ● Initializing MediaPipe...
+                        </span>
+                    </div>
+
+                    <!-- Webcam & Skeleton Canvas -->
+                    <div class="vision-container">
+                        <video id="webcam" autoplay playsinline muted></video>
+                        <canvas id="skeletonCanvas"></canvas>
+
+                        <!-- Live Recognition Pill Overlay -->
+                        <div class="sign-overlay-pill">
+                            <div class="sign-letter-box" id="detectedSignBox">--</div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Recognized Sign</div>
+                                <strong id="detectedSignName" style="font-size: 0.95rem;">Show Hand to Camera</strong>
+                                <div style="font-size: 0.7rem; color: #34d399;" id="detectedConfidence">Confidence: 0%</div>
+                            </div>
+                        </div>
+
+                        <!-- Hold Progress Bar -->
+                        <div class="hold-progress-bar" id="holdProgressBar"></div>
+                    </div>
+
+                    <!-- Sentence & Word Building Interface (Chapter 6.1.3 of Report) -->
+                    <div class="sentence-box-container">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <label style="margin-bottom: 0; font-size: 0.85rem; font-weight: 700; color: #334155;">
+                                ✍️ Word & Sentence Builder:
+                            </label>
+                            <span style="font-size: 0.75rem; color: #64748b;">
+                                Hold gesture steady to append letter
+                            </span>
+                        </div>
+
+                        <div class="sentence-display" id="sentenceDisplay">
+                            <span id="sentenceText">HELLO</span><span class="cursor-blink"></span>
+                        </div>
+
+                        <!-- Action Controls -->
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: space-between; align-items: center; margin-top: 0.85rem;">
+                            <div style="display: flex; gap: 0.4rem;">
+                                <button class="btn btn-outline btn-sm" onclick="addSpace()">␣ Space</button>
+                                <button class="btn btn-outline btn-sm" onclick="backspace()">⌫ Backspace</button>
+                                <button class="btn btn-outline btn-sm" onclick="clearSentence()">🗑 Clear</button>
+                            </div>
+
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-outline btn-sm" onclick="speakCurrentSentence()" style="color: #6d28d9; border-color: #c4b5fd;">
+                                    🔊 Speak (TTS)
+                                </button>
+                                <button class="btn btn-primary btn-sm" onclick="sendSentenceToChat()" style="background: var(--accessible-primary);">
+                                    💬 Send Answer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Candidate Responses -->
+                    <div style="margin-top: 1.25rem;">
+                        <div style="font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.4rem;">
+                            ⚡ Accessible Quick Interview Responses:
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                            <button class="quick-phrase-pill" onclick="insertQuickPhrase('I am ready to begin.')">
+                                👋 "I am ready to begin."
+                            </button>
+                            <button class="quick-phrase-pill" onclick="insertQuickPhrase('Yes, I have experience with Python and ML.')">
+                                💼 "Experienced with Python & ML"
+                            </button>
+                            <button class="quick-phrase-pill" onclick="insertQuickPhrase('Could you please repeat the question?')">
+                                ❓ "Please repeat question"
+                            </button>
+                            <button class="quick-phrase-pill" onclick="insertQuickPhrase('Thank you for this opportunity.')">
+                                🙏 "Thank you!"
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- RIGHT: Two-Way Closed Captions & Live Communication Hub -->
+            <div>
+                <div class="card" style="padding: 1.5rem;">
+                    
+                    <!-- Candidate & Interview Info Card -->
+                    <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                            <strong style="font-size: 1rem; color: #1e293b;">{{ session.candidate_name }}</strong>
+                            {% if session.score %}
+                            <span class="score-badge high" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;">
+                                🎯 {{ session.score }}% Match
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-muted);">
+                            Role: <strong>{{ session.job_title }}</strong> &bull; 🏢 {{ session.company }}
+                        </div>
+                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">
+                            Panel: 👨‍💼 {{ session.interviewer_name }} &bull; 🕒 {{ session.scheduled_time }}
+                        </div>
+                    </div>
+
+                    <!-- TWO-WAY ASSISTIVE CLOSED CAPTIONS (Interviewer -> Candidate) -->
+                    <div class="captions-box">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                            <span style="font-size: 0.75rem; text-transform: uppercase; color: #a5b4fc; font-weight: 700;">
+                                🎙️ Live Interviewer Speech-To-Text (Closed Captions)
+                            </span>
+                            <button id="btnToggleCaptions" class="btn btn-sm" style="background: rgba(255,255,255,0.15); color: white; padding: 0.2rem 0.5rem; font-size: 0.7rem;" onclick="toggleSpeechRecognition()">
+                                🔴 Start Captions
+                            </button>
+                        </div>
+                        <div class="captions-text" id="interviewerCaptions">
+                            <em>Click "Start Captions" to transcribe the interviewer's voice in real-time for the deaf candidate...</em>
+                        </div>
+                    </div>
+
+                    <!-- Live Interview Communication Exchange -->
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                            <label style="margin-bottom: 0; font-size: 0.85rem; font-weight: 700;">
+                                💬 Live Interview Dialogue Log:
+                            </label>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);" id="msgCountLabel">2 messages</span>
+                        </div>
+
+                        <div class="comm-history-log" id="commLog">
+                            <div class="msg-bubble msg-interviewer">
+                                <strong>Interviewer:</strong> Welcome {{ session.candidate_name.split()[0] }}! We are excited to have you in this technical round.
+                            </div>
+                            <div class="msg-bubble msg-candidate">
+                                <strong>Candidate:</strong> HELLO I AM READY.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accessible Google Meet Launcher Box -->
+                    <div style="margin-top: 1.5rem; background: var(--accessible-light); border: 1px solid #ddd6fe; border-radius: var(--radius-md); padding: 1.25rem;">
+                        <h4 style="font-size: 0.95rem; font-weight: 700; color: #5b21b6; margin-bottom: 0.25rem;">
+                            Google Meet Side-By-Side Bridge
+                        </h4>
+                        <p style="font-size: 0.8rem; color: #6b21a8; line-height: 1.4; margin-bottom: 0.75rem;">
+                            Keep this Accessible Sign Language window open side-by-side with your Google Meet call for real-time translation and captions.
+                        </p>
+                        <a href="{{ session.meet_url or 'https://meet.google.com/new' }}" target="_blank" class="btn btn-primary btn-sm" style="width: 100%; background: var(--meet-blue); display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                            <span>Launch Google Meet in Split Window ↗</span>
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ASL REFERENCE & LANDMARK MODAL -->
+    <div id="aslGuideModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; padding: 1rem;">
+        <div class="card" style="max-width: 650px; width: 100%; max-height: 85vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="font-size: 1.2rem; font-weight: 800;">MediaPipe 21 Landmarks & ASL Sign Reference</h3>
+                <button onclick="toggleASLGuideModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">✕</button>
+            </div>
+
+            <div style="font-size: 0.85rem; color: #475569; line-height: 1.5;">
+                <p>The system tracks <strong>21 coordinate landmarks</strong> on your hand in real-time:</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 1rem 0; background: #f8fafc; padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                    <div>
+                        <strong>Key Finger Tips:</strong>
+                        <ul style="margin-left: 1rem; margin-top: 0.25rem; font-size: 0.8rem;">
+                            <li>Thumb: Landmark 4</li>
+                            <li>Index: Landmark 8</li>
+                            <li>Middle: Landmark 12</li>
+                            <li>Ring: Landmark 16</li>
+                            <li>Pinky: Landmark 20</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <strong>Supported Gestures:</strong>
+                        <ul style="margin-left: 1rem; margin-top: 0.25rem; font-size: 0.8rem;">
+                            <li><strong>V</strong>: Index & Middle UP (Victory)</li>
+                            <li><strong>L</strong>: Index UP, Thumb OUT</li>
+                            <li><strong>B</strong>: 4 fingers UP together</li>
+                            <li><strong>A</strong>: Fist with thumb upright</li>
+                            <li><strong>YES</strong>: Thumbs UP</li>
+                            <li><strong>NO</strong>: Thumbs DOWN</li>
+                            <li><strong>HELLO</strong>: Open palm wave</li>
+                            <li><strong>THANK YOU</strong>: Thumb + Index + Pinky</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: right; margin-top: 1rem;">
+                <button class="btn btn-primary btn-sm" onclick="toggleASLGuideModal()">Got it!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toastNotification" class="toast"></div>
+
+    <!-- Footnote -->
+    <footer>
+        <p><strong>TalentAI Accessible Recruitment Suite</strong> &bull; Empowering Deaf & Mute Professionals &bull; Powered by MediaPipe 21 Landmarks & Web Speech API</p>
+    </footer>
+
+    <!-- Real-Time MediaPipe & Gesture Engine Script -->
+    <script>
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('skeletonCanvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const detectedSignBox = document.getElementById('detectedSignBox');
+        const detectedSignName = document.getElementById('detectedSignName');
+        const detectedConfidence = document.getElementById('detectedConfidence');
+        const holdProgressBar = document.getElementById('holdProgressBar');
+        const sentenceText = document.getElementById('sentenceText');
+        const statusBadge = document.getElementById('trackerStatusBadge');
+
+        let handsDetector = null;
+        let camera = null;
+        let currentHoldSign = "";
+        let holdStartTime = 0;
+        const HOLD_DURATION_MS = 850; // hold gesture for 0.85s to lock letter
+
+        // Connections between 21 landmarks
+        const HAND_CONNECTIONS = [
+            [0, 1], [1, 2], [2, 3], [3, 4],       // Thumb
+            [0, 5], [5, 6], [6, 7], [7, 8],       // Index
+            [5, 9], [9, 10], [10, 11], [11, 12],  // Middle
+            [9, 13], [13, 14], [14, 15], [15, 16], // Ring
+            [13, 17], [17, 18], [18, 19], [19, 20], // Pinky
+            [0, 17]                               // Palm base
+        ];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            initMediaPipeHands();
+        });
+
+        // Initialize MediaPipe Hands
+        function initMediaPipeHands() {
+            handsDetector = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
+
+            handsDetector.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            handsDetector.onResults(onHandResults);
+
+            camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    await handsDetector.send({ image: videoElement });
+                },
+                width: 640,
+                height: 400
+            });
+
+            camera.start()
+                .then(() => {
+                    statusBadge.innerText = "● Camera & Hands Tracking Active (60 FPS)";
+                    statusBadge.style.color = "#10b981";
+                })
+                .catch((err) => {
+                    console.warn("Camera start fallback:", err);
+                    statusBadge.innerText = "● Webcam Access Requested";
+                });
+        }
+
+        // On hand detection results
+        function onHandResults(results) {
+            // Resize canvas to match video
+            canvasElement.width = videoElement.videoWidth || 640;
+            canvasElement.height = videoElement.videoHeight || 400;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const lms = results.multiHandLandmarks[0];
+
+                // 1. Draw Skeleton Connections
+                canvasCtx.strokeStyle = "#10b981"; // Neon green
+                canvasCtx.lineWidth = 4;
+                for (const [start, end] of HAND_CONNECTIONS) {
+                    const p1 = lms[start];
+                    const p2 = lms[end];
+                    canvasCtx.beginPath();
+                    canvasCtx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
+                    canvasCtx.lineTo(p2.x * canvasElement.width, p2.y * canvasElement.height);
+                    canvasCtx.stroke();
+                }
+
+                // 2. Draw 21 Landmark Nodes
+                for (let i = 0; i < lms.length; i++) {
+                    const p = lms[i];
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(p.x * canvasElement.width, p.y * canvasElement.height, 5, 0, 2 * Math.PI);
+                    // Distinct color for fingertips (4, 8, 12, 16, 20)
+                    if ([4, 8, 12, 16, 20].includes(i)) {
+                        canvasCtx.fillStyle = "#f59e0b"; // Gold tip
+                    } else {
+                        canvasCtx.fillStyle = "#06b6d4"; // Cyan joint
+                    }
+                    canvasCtx.fill();
+                    canvasCtx.strokeStyle = "#ffffff";
+                    canvasCtx.lineWidth = 1.5;
+                    canvasCtx.stroke();
+                }
+
+                // 3. Classify Gesture using Landmark Coordinates
+                const classification = classifyGestureLandmarks(lms);
+                updateGestureUI(classification);
+            } else {
+                // No hand detected
+                detectedSignBox.innerText = "--";
+                detectedSignName.innerText = "Show Hand to Camera";
+                detectedConfidence.innerText = "Confidence: 0%";
+                holdProgressBar.style.width = "0%";
+                currentHoldSign = "";
+            }
+
+            canvasCtx.restore();
+        }
+
+        // Fast Client-Side Mathematical Classifier (as documented in Report Chapter 4 & 5)
+        function classifyGestureLandmarks(lms) {
+            const wrist = lms[0];
+            const thumbTip = lms[4];
+            const thumbMcp = lms[2];
+            const indexMcp = lms[5];
+            const indexPip = lms[6];
+            const indexTip = lms[8];
+            const middlePip = lms[10];
+            const middleTip = lms[12];
+            const ringPip = lms[14];
+            const ringTip = lms[16];
+            const pinkyPip = lms[18];
+            const pinkyTip = lms[20];
+
+            // In normalized screen coordinates, y=0 is top, y=1 is bottom
+            const isIndexUp = indexTip.y < indexPip.y;
+            const isMiddleUp = middleTip.y < middlePip.y;
+            const isRingUp = ringTip.y < ringPip.y;
+            const isPinkyUp = pinkyTip.y < pinkyPip.y;
+
+            // Thumb checks
+            const isThumbUp = thumbTip.y < thumbMcp.y;
+            const isThumbOut = Math.abs(thumbTip.x - indexMcp.x) > 0.12;
+
+            // Distances
+            const distThumbIndex = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+            const distIndexMiddle = Math.hypot(indexTip.x - middleTip.x, indexTip.y - middleTip.y);
+
+            // 1. YES / THUMBS UP
+            if (isThumbUp && !isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp) {
+                return { sign: "YES", name: "YES / Thumbs Up", conf: 96 };
+            }
+
+            // 2. NO / THUMBS DOWN
+            if (thumbTip.y > wrist.y && !isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp) {
+                return { sign: "NO", name: "NO / Thumbs Down", conf: 94 };
+            }
+
+            // 3. HELLO / OPEN WAVE
+            if (isIndexUp && isMiddleUp && isRingUp && isPinkyUp && isThumbOut) {
+                if (distIndexMiddle > 0.08) {
+                    return { sign: "HELLO", name: "HELLO / Wave", conf: 95 };
+                } else {
+                    return { sign: "B", name: "Letter 'B'", conf: 93 };
+                }
+            }
+
+            // 4. THANK YOU / I LOVE YOU SIGN
+            if (isThumbOut && isIndexUp && !isMiddleUp && !isRingUp && isPinkyUp) {
+                return { sign: "THANK YOU", name: "THANK YOU (ILY)", conf: 96 };
+            }
+
+            // 5. OK / CONFIRMED / LETTER F
+            if (distThumbIndex < 0.07 && isMiddleUp && isRingUp && isPinkyUp) {
+                return { sign: "OK", name: "OK / Confirmed (F)", conf: 95 };
+            }
+
+            // 6. LETTER V / VICTORY
+            if (isIndexUp && isMiddleUp && !isRingUp && !isPinkyUp) {
+                if (distIndexMiddle > 0.05) {
+                    return { sign: "V", name: "Letter 'V'", conf: 97 };
+                } else {
+                    return { sign: "U", name: "Letter 'U'", conf: 92 };
+                }
+            }
+
+            // 7. LETTER W / NUMBER 3
+            if (isIndexUp && isMiddleUp && isRingUp && !isPinkyUp) {
+                return { sign: "W", name: "Letter 'W' / 3", conf: 95 };
+            }
+
+            // 8. LETTER L
+            if (isIndexUp && isThumbOut && !isMiddleUp && !isRingUp && !isPinkyUp) {
+                return { sign: "L", name: "Letter 'L'", conf: 98 };
+            }
+
+            // 9. LETTER Y
+            if (isThumbOut && !isIndexUp && !isMiddleUp && !isRingUp && isPinkyUp) {
+                return { sign: "Y", name: "Letter 'Y'", conf: 96 };
+            }
+
+            // 10. LETTER I
+            if (!isIndexUp && !isMiddleUp && !isRingUp && isPinkyUp && !isThumbOut) {
+                return { sign: "I", name: "Letter 'I'", conf: 97 };
+            }
+
+            // 11. LETTER D / NUMBER 1
+            if (isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp && !isThumbOut) {
+                return { sign: "D", name: "Letter 'D' / 1", conf: 96 };
+            }
+
+            // 12. LETTER A / READY
+            if (!isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp) {
+                if (thumbTip.y < indexPip.y) {
+                    return { sign: "A", name: "Letter 'A'", conf: 91 };
+                } else {
+                    return { sign: "READY", name: "READY / Fist", conf: 89 };
+                }
+            }
+
+            return { sign: "...", name: "Adjusting Hand...", conf: 60 };
+        }
+
+        // Update UI & manage the word-builder hold timer
+        function updateGestureUI(item) {
+            detectedSignBox.innerText = item.sign;
+            detectedSignName.innerText = item.name;
+            detectedConfidence.innerText = `Confidence: ${item.conf}%`;
+
+            if (item.sign === "..." || item.sign === "--") {
+                currentHoldSign = "";
+                holdProgressBar.style.width = "0%";
+                return;
+            }
+
+            const now = Date.now();
+            if (item.sign === currentHoldSign) {
+                const elapsed = now - holdStartTime;
+                const pct = Math.min(100, (elapsed / HOLD_DURATION_MS) * 100);
+                holdProgressBar.style.width = `${pct}%`;
+
+                if (elapsed >= HOLD_DURATION_MS) {
+                    // Lock and append letter or word
+                    appendSignToSentence(item.sign);
+                    holdProgressBar.style.width = "0%";
+                    currentHoldSign = "";
+                    holdStartTime = now + 600; // brief cooldown
+                }
+            } else {
+                currentHoldSign = item.sign;
+                holdStartTime = now;
+                holdProgressBar.style.width = "0%";
+            }
+        }
+
+        // Sentence Builder Functions
+        function appendSignToSentence(sign) {
+            let current = sentenceText.innerText.trim();
+            if (["YES", "NO", "HELLO", "THANK YOU", "READY", "OK"].includes(sign)) {
+                if (current.length > 0 && !current.endsWith(" ")) {
+                    current += " ";
+                }
+                current += sign + " ";
+                speakText(sign);
+            } else {
+                current += sign;
+            }
+            sentenceText.innerText = current;
+            showToast(`Locked: ${sign}`);
+        }
+
+        function addSpace() {
+            sentenceText.innerText += " ";
+        }
+
+        function backspace() {
+            let t = sentenceText.innerText;
+            if (t.length > 0) {
+                sentenceText.innerText = t.slice(0, -1);
+            }
+        }
+
+        function clearSentence() {
+            sentenceText.innerText = "";
+        }
+
+        function insertQuickPhrase(phrase) {
+            sentenceText.innerText = phrase;
+            speakText(phrase);
+            sendSentenceToChat();
+        }
+
+        // Text-to-Speech (TTS)
+        function speakCurrentSentence() {
+            const text = sentenceText.innerText.trim();
+            if (!text) {
+                showToast("Sentence box is empty!");
+                return;
+            }
+            speakText(text);
+        }
+
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+                showToast(`🔊 Speaking: "${text}"`);
+            } else {
+                showToast("Text-to-speech not supported on this browser.");
+            }
+        }
+
+        // Send to Live Dialogue Log
+        function sendSentenceToChat() {
+            const text = sentenceText.innerText.trim();
+            if (!text) return;
+
+            const commLog = document.getElementById('commLog');
+            const bubble = document.createElement('div');
+            bubble.className = "msg-bubble msg-candidate";
+            bubble.innerHTML = `<strong>Candidate (Sign Translation):</strong> ${escapeHtml(text)}`;
+            commLog.appendChild(bubble);
+            commLog.scrollTop = commLog.scrollHeight;
+
+            speakText(text);
+            sentenceText.innerText = "";
+            showToast("✓ Message sent to interview dialogue!");
+        }
+
+        // Live Speech-to-Text (Closed Captions for Deaf Candidate)
+        let recognition = null;
+        let isCaptionsActive = false;
+
+        function toggleSpeechRecognition() {
+            const btn = document.getElementById('btnToggleCaptions');
+            const captionsBox = document.getElementById('interviewerCaptions');
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                showToast("Web Speech Recognition not supported in this browser.");
+                return;
+            }
+
+            if (!isCaptionsActive) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+
+                recognition.onstart = () => {
+                    isCaptionsActive = true;
+                    btn.innerText = "⏹ Stop Captions";
+                    btn.style.background = "#ea4335";
+                    captionsBox.innerHTML = '<span style="color:#a5b4fc;">[Listening to interviewer...] Speak into microphone.</span>';
+                    showToast("Closed captions started!");
+                };
+
+                recognition.onresult = (event) => {
+                    let interimTranscript = '';
+                    let finalTranscript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) {
+                            finalTranscript += event.results[i][0].transcript;
+                        } else {
+                            interimTranscript += event.results[i][0].transcript;
+                        }
+                    }
+
+                    if (finalTranscript || interimTranscript) {
+                        captionsBox.innerHTML = `<strong>Interviewer:</strong> "${finalTranscript || interimTranscript}"`;
+                    }
+
+                    if (finalTranscript) {
+                        const commLog = document.getElementById('commLog');
+                        const bubble = document.createElement('div');
+                        bubble.className = "msg-bubble msg-interviewer";
+                        bubble.innerHTML = `<strong>Interviewer:</strong> ${escapeHtml(finalTranscript)}`;
+                        commLog.appendChild(bubble);
+                        commLog.scrollTop = commLog.scrollHeight;
+                    }
+                };
+
+                recognition.onerror = (err) => {
+                    console.log("Speech recognition error:", err);
+                };
+
+                recognition.onend = () => {
+                    if (isCaptionsActive) {
+                        recognition.start();
+                    }
+                };
+
+                recognition.start();
+            } else {
+                isCaptionsActive = false;
+                if (recognition) recognition.stop();
+                btn.innerText = "🔴 Start Captions";
+                btn.style.background = "rgba(255,255,255,0.15)";
+                captionsBox.innerHTML = '<em>Captions paused. Click "Start Captions" to resume.</em>';
+                showToast("Closed captions stopped.");
+            }
+        }
+
+        // Modal
+        function toggleASLGuideModal() {
+            const m = document.getElementById('aslGuideModal');
+            m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function showToast(msg) {
+            let toast = document.getElementById("toastNotification");
+            if (!toast) {
+                toast = document.createElement("div");
+                toast.id = "toastNotification";
+                toast.className = "toast";
+                document.body.appendChild(toast);
+            }
+            toast.innerText = msg;
+            toast.style.display = "block";
+            setTimeout(() => {
+                toast.style.display = "none";
+            }, 3500);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

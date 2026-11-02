@@ -1,0 +1,10 @@
+flask
+mysql-connector-python
+werkzeug
+pytesseract
+python-docx
+PyPDF2
+pillow
+deep-translator
+sentence-transformers
+torch

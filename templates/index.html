@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TalentAI — Intelligent Resume & Job Matching System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="navbar">
+        <a href="/" class="nav-brand">
+            <div class="brand-icon">⚡</div>
+            <div class="brand-text">
+                <h1>TalentAI Matcher</h1>
+                <p>AI-Powered Semantic Resume & Job Fit Engine</p>
+            </div>
+        </a>
+        <div class="nav-actions">
+            <span class="badge-ai"><span class="dot"></span> SBERT all-MiniLM-L6-v2</span>
+            <a href="/interview" class="btn btn-outline btn-sm">📹 Interview Lobby</a>
+            <a href="/matches" class="btn btn-outline btn-sm">📊 Match Analytics</a>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <!-- Live Platform Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon blue">💼</div>
+                <div class="stat-info">
+                    <h4>Available Jobs</h4>
+                    <div class="stat-number" id="statTotalJobs">--</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon purple">📄</div>
+                <div class="stat-info">
+                    <h4>Candidate Resumes</h4>
+                    <div class="stat-number" id="statTotalResumes">--</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon green">⚡</div>
+                <div class="stat-info">
+                    <h4>Matches Evaluated</h4>
+                    <div class="stat-number" id="statTotalMatches">--</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon amber">🎯</div>
+                <div class="stat-info">
+                    <h4>Avg. Match Score</h4>
+                    <div class="stat-number" id="statAvgScore">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs-nav">
+            <button class="tab-btn active" data-tab="candidate-tab">
+                <span>🎯 Candidate Portal</span>
+            </button>
+            <button class="tab-btn" data-tab="recruiter-tab">
+                <span>💼 Recruiter Portal</span>
+            </button>
+            <button class="tab-btn" data-tab="catalog-tab">
+                <span>📋 Job Openings Catalog</span>
+            </button>
+            <button class="tab-btn" data-tab="addjob-tab">
+                <span>➕ Post New Job</span>
+            </button>
+        </div>
+
+        <!-- TAB 1: Candidate Portal -->
+        <section id="candidate-tab" class="tab-content" style="display: block;">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Match Your Resume to Open Jobs</h2>
+                    <p>Upload your resume in PDF, DOCX, TXT, or Image format, or paste your experience below. Our AI evaluates semantic alignment and skill gaps.</p>
+                </div>
+
+                <form id="matchResumeForm">
+                    <div class="upload-grid">
+                        <!-- Dropzone -->
+                        <div>
+                            <label>Upload Resume Document</label>
+                            <div class="dropzone" id="resumeDropzone">
+                                <div class="dropzone-icon">📁</div>
+                                <p>Click to upload or drag & drop</p>
+                                <small>PDF, DOCX, TXT, PNG, JPG (Max 16MB)</small>
+                                <span class="file-selected" id="resumeFileName"></span>
+                            </div>
+                            <input type="file" id="resumeFileInput" name="resume_file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg" style="display: none;">
+                        </div>
+
+                        <!-- Raw Text -->
+                        <div>
+                            <label for="resumeTextInput">Or Paste Resume Text</label>
+                            <textarea id="resumeTextInput" name="resume_text" rows="7" placeholder="Paste candidate summary, work experience, technical skills, and education here..."></textarea>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 1.5rem; text-align: right;">
+                        <button type="submit" class="btn btn-primary" id="btnMatchResume">
+                            <span class="spinner"></span>
+                            <span>Analyze & Find Top Matching Jobs</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Candidate Match Results Container -->
+            <div id="resumeResultsContainer" style="display: none; margin-top: 2rem;">
+                <div id="candidateProfileBox"></div>
+
+                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="font-size: 1.25rem; font-weight: 700; color: #1e293b;">Top Recommended Job Matches</h3>
+                    <span style="font-size: 0.85rem; color: #64748b;">Ranked by AI Fit Percentage</span>
+                </div>
+
+                <div class="matches-grid" id="resumeMatchesGrid"></div>
+            </div>
+        </section>
+
+        <!-- TAB 2: Recruiter Portal -->
+        <section id="recruiter-tab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Find Best Candidates for a Job</h2>
+                    <p>Select an active job opening from our database or upload a new job description to instantly rank the best matching candidate resumes.</p>
+                </div>
+
+                <form id="matchJobForm">
+                    <div class="form-group">
+                        <label for="existingJobSelect">Select from Existing Openings</label>
+                        <select id="existingJobSelect" name="job_id">
+                            <option value="">-- Loading active openings... --</option>
+                        </select>
+                    </div>
+
+                    <div class="divider">OR UPLOAD NEW JOB DESCRIPTION</div>
+
+                    <div class="upload-grid">
+                        <div>
+                            <label>Upload Job Description File</label>
+                            <div class="dropzone" id="jobDropzone">
+                                <div class="dropzone-icon">📋</div>
+                                <p>Click to browse or drop job description</p>
+                                <small>PDF, DOCX, TXT</small>
+                                <span class="file-selected" id="jobFileName"></span>
+                            </div>
+                            <input type="file" id="jobFileInput" name="job_file" accept=".pdf,.docx,.txt" style="display: none;">
+                        </div>
+
+                        <div>
+                            <label for="jobTextInput">Or Paste Job Description</label>
+                            <textarea id="jobTextInput" name="job_text" rows="7" placeholder="Paste full job requirements, required technical qualifications, responsibilities..."></textarea>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 1.5rem; text-align: right;">
+                        <button type="submit" class="btn btn-primary" id="btnMatchJob">
+                            <span class="spinner"></span>
+                            <span>Find Matching Candidates</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Recruiter Match Results Container -->
+            <div id="jobResultsContainer" style="display: none; margin-top: 2rem;">
+                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="font-size: 1.25rem; font-weight: 700; color: #1e293b;">Top Candidate Matches for: <span id="matchedJobTitle" style="color: var(--primary);"></span></h3>
+                    <span style="font-size: 0.85rem; color: #64748b;">Ranked by Semantic Fit & Skill Match</span>
+                </div>
+
+                <div class="matches-grid" id="jobCandidatesGrid"></div>
+            </div>
+        </section>
+
+        <!-- TAB 3: Job Catalog -->
+        <section id="catalog-tab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h2>Current Job Openings Catalog</h2>
+                        <p>Browse active positions indexed in the matching database.</p>
+                    </div>
+                </div>
+
+                <div class="matches-grid" id="jobsCatalogGrid" style="margin-top: 1.5rem;">
+                    <p style="color: #94a3b8;">Loading job catalog...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: Post New Job -->
+        <section id="addjob-tab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Post a New Job Opening</h2>
+                    <p>Add a new job position to the system. Once added, candidate resumes will be automatically evaluated against it.</p>
+                </div>
+
+                <form id="addNewJobForm">
+                    <div class="form-group">
+                        <label for="newJobTitle">Job Title *</label>
+                        <input type="text" id="newJobTitle" placeholder="e.g. Senior Machine Learning Engineer" required>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="newJobCompany">Company Name</label>
+                            <input type="text" id="newJobCompany" placeholder="e.g. Acme AI Labs">
+                        </div>
+                        <div class="form-group">
+                            <label for="newJobLocation">Location</label>
+                            <input type="text" id="newJobLocation" placeholder="e.g. San Francisco, CA (or Remote)">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newJobDescription">Job Requirements & Description *</label>
+                        <textarea id="newJobDescription" rows="8" placeholder="List required skills (Python, Docker, PyTorch...), responsibilities, and experience level..." required></textarea>
+                    </div>
+
+                    <div style="text-align: right;">
+                        <button type="submit" class="btn btn-primary">Publish Job Opening</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p><strong>TalentAI Matching System</strong> &bull; Developed with Python Flask, Sentence-BERT (MiniLM-L6), PyPDF2, and SQLite/MySQL</p>
+    </footer>
+
+    <!-- Script -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

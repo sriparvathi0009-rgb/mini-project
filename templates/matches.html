@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match Analytics & History — TalentAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="navbar">
+        <a href="/" class="nav-brand">
+            <div class="brand-icon">⚡</div>
+            <div class="brand-text">
+                <h1>TalentAI Matcher</h1>
+                <p>AI-Powered Semantic Resume & Job Fit Engine</p>
+            </div>
+        </a>
+        <div class="nav-actions">
+            <a href="/" class="btn btn-outline btn-sm">🏠 Dashboard</a>
+            <a href="/interview" class="btn btn-outline btn-sm">📹 Interview Lobby</a>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="card" style="margin-top: 1rem;">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h2>Resume–Job Match Analytics</h2>
+                    <p>Comprehensive historical database of all evaluated candidate matches and scores.</p>
+                </div>
+            </div>
+
+            <!-- Search and Filter Bar -->
+            <form method="GET" action="/matches" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: flex-end;">
+                <div style="flex: 2; min-width: 200px;">
+                    <label for="q">Search by Candidate, Role, or Company</label>
+                    <input type="text" id="q" name="q" placeholder="Type keyword (e.g. Python, Scientist, Google)..." value="{{ keyword }}">
+                </div>
+
+                <div style="flex: 1; min-width: 150px;">
+                    <label for="min_score">Minimum Score (%)</label>
+                    <select id="min_score" name="min_score">
+                        <option value="0" {% if min_score == '0' %}selected{% endif %}>All Scores (0%+)</option>
+                        <option value="40" {% if min_score == '40' %}selected{% endif %}>Moderate Fit (40%+)</option>
+                        <option value="60" {% if min_score == '60' %}selected{% endif %}>Good Fit (60%+)</option>
+                        <option value="75" {% if min_score == '75' %}selected{% endif %}>High Fit (75%+)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <button type="submit" class="btn btn-primary" style="padding: 0.75rem 1.25rem;">Apply Filter</button>
+                    {% if keyword or (min_score and min_score != '0') %}
+                        <a href="/matches" class="btn btn-outline" style="padding: 0.75rem 1rem;">Reset</a>
+                    {% endif %}
+                </div>
+            </form>
+
+            <!-- Table of Results -->
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 80px;">ID</th>
+                            <th>Candidate Profile</th>
+                            <th>Matched Job Title & Company</th>
+                            <th style="width: 130px; text-align: center;">Fit Score</th>
+                            <th>Matched Skill Highlights</th>
+                            <th style="width: 120px;">Evaluated</th>
+                            <th style="width: 110px; text-align: center;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if results %}
+                            {% for row in results %}
+                            {% set score = row.score | float %}
+                            {% set score_class = 'high' if score >= 70 else ('medium' if score >= 45 else 'low') %}
+                            <tr>
+                                <td><span style="color: #94a3b8; font-weight: 600;">#{{ row.id }}</span></td>
+                                <td>
+                                    <strong>{{ row.candidate_name or 'Candidate #' ~ row.resume_id }}</strong>
+                                    {% if row.email %}
+                                        <div style="font-size: 0.75rem; color: #64748b;">{{ row.email }}</div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ row.job_title }}</strong>
+                                    <div style="font-size: 0.75rem; color: #64748b;">
+                                        🏢 {{ row.company or 'Direct' }} | 📍 {{ row.location or 'Remote' }}
+                                    </div>
+                                </td>
+                                <td style="text-align: center;">
+                                    <span class="score-badge {{ score_class }}">{{ "%.1f"|format(score) }}%</span>
+                                </td>
+                                <td>
+                                    {% if row.matched_skills %}
+                                        <div class="skill-pills">
+                                            {% for s in row.matched_skills.split(',')[:5] %}
+                                                <span class="pill pill-matched">✓ {{ s.strip() }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <span style="font-size: 0.8rem; color: #94a3b8;">Semantic similarity match</span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-size: 0.8rem; color: #64748b;">
+                                    {{ (row.created_at | string)[:10] if row.created_at else 'Recent' }}
+                                </td>
+                                <td style="text-align: center;">
+                                    {% if score >= 60 %}
+                                        <a href="/interview?candidate={{ row.candidate_name | urlencode }}&role={{ row.job_title | urlencode }}&company={{ row.company | urlencode }}&score={{ '%.1f'|format(score) }}" 
+                                           class="btn btn-outline btn-sm" 
+                                           style="padding: 0.3rem 0.6rem; font-size: 0.75rem; border-color: #1a73e8; color: #1a73e8; font-weight: 600;"
+                                           title="Start Google Meet Interview (Qualified ≥60%)">
+                                            Meet 📹
+                                        </a>
+                                    {% else %}
+                                        <span style="font-size: 0.75rem; color: #94a3b8;" title="Match score below 60% threshold for interview">&mdash;</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 3rem; color: #94a3b8;">
+                                    No matches found matching your search criteria.
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-top: 1rem; font-size: 0.85rem; color: #64748b; text-align: right;">
+                Showing {{ results|length }} match records
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p><strong>TalentAI Matching System</strong> &bull; Developed with Python Flask, Sentence-BERT, PyPDF2, and SQLite/MySQL</p>
+    </footer>
+
+</body>
+</html>
